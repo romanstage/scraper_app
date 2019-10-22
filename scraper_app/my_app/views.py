@@ -3,16 +3,15 @@ from django.shortcuts import render
 from bs4 import BeautifulSoup
 from requests.compat import quote_plus
 from .import models
-
+import csv
+import re
 
 def home(request):
     return render(request, 'base.html')
 
-
 def get_html(url):
     r = requests.get(url)
     return r.text
-
 
 def get_page_data(html):
     soup = BeautifulSoup(html, features='html.parser')
@@ -22,11 +21,12 @@ def get_page_data(html):
 
     if post_listings:
         for post in post_listings:
-            # PRICE
+            # Описание
             try:
-                post_title = post.find('div', {'class': 'description'}).find('h3').text.strip()
+                soup_title = post.find('div', {'class': 'description'}).find('h3').text.strip()
+                post_title = re.sub('[\W_]+', '', soup_title)
             except:
-                post_title = ''
+                post_title = 'нет описания'
 
             # URL
             try:
@@ -36,7 +36,8 @@ def get_page_data(html):
 
             # PRICE
             try:
-                post_price = post.find('div', {'class': 'about'}).text.strip()
+                soup_price = post.find('div', {'class': 'about'}).text.strip()
+                post_price = soup_price.split('₽')[0] + ' руб.'
             except:
                 post_price = 'НЕ УКАЗАНА'
 
@@ -55,8 +56,16 @@ def get_total_pages(html):
 
     pages = soup.find('div', {'class': 'pagination-pages'}).find_all('a', {'class': 'pagination-page'})[-1].get('href')
     total_pages = int(pages.split('=')[1].split('&')[0])
-    print("total pages ",total_pages)
+
     return int(total_pages)
+
+
+def write_csv(data):
+    with open('avito.csv','a') as out:
+        csv_out=csv.writer(out)
+        csv_out.writerow(['наименование','URL','цена'])
+        for row in data:
+            csv_out.writerow(row)
 
 def new_search(request):
     BASE_AVITO_URL = 'https://www.avito.ru/rossiya?q={}'
@@ -77,6 +86,8 @@ def new_search(request):
         html = get_html(final_url)
         final_postings+=get_page_data(html)
     print(final_postings)
+
+    write_csv(final_postings)
 
     stuff_for_frontend = {
         'search': search,
